@@ -234,3 +234,1022 @@ output_message = completion.choices[0].message.content
 
 print(output_message)
 
+from google.colab import drive
+drive.mount('/content/drive')
+
+ pip install pyannote.audio speechbrain pydub
+
+pip install pysrt git+https://github.com/openai/whisper.git
+
+from google.colab import drive
+import os
+from pydub import AudioSegment
+import pysrt
+
+# Mount Google Drive
+drive.mount('/content/drive')
+
+# Define file paths
+mp3_path = '/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02 上課錄音檔.mp3'
+srt_path = '/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02 逐字稿範例.srt'
+
+# Check if files exist
+assert os.path.exists(mp3_path), "MP3 file not found"
+assert os.path.exists(srt_path), "SRT file not found"
+
+# Read MP3 file
+audio = AudioSegment.from_mp3(mp3_path)
+print(f"Loaded MP3 file with duration: {len(audio) / 1000} seconds")
+
+# Read SRT file
+subs = pysrt.open(srt_path)
+for sub in subs[:5]:  # Print the first 5 subtitles as an example
+    print(f"Start: {sub.start}, End: {sub.end}, Text: {sub.text}")
+
+# Step 2: Mount Google Drive
+from google.colab import drive
+import os
+import pandas as pd
+
+# Step 3: Define file paths
+mp3_path = '/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02 上課錄音檔.mp3'
+srt_path = '/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02 逐字稿範例.srt'
+csv_path = '/content/drive/MyDrive/AI_sound/上課錄音檔案樣本資料集(保密資訊).csv'
+
+# Ensure files exist
+assert os.path.exists(mp3_path), "MP3 file not found"
+assert os.path.exists(srt_path), "SRT file not found"
+assert os.path.exists(csv_path), "CSV file not found"
+
+# Step 4: Read CSV file and filter relevant row
+df = pd.read_csv(csv_path)
+row = df[df['ClassroomId'] == 4794369]
+print(row)
+
+# Extract relevant information
+file_name = row['FileName'].values[0]
+teacher_id = row['Teacher'].values[0]
+student_id = row['Student'].values[0]
+print(f"FileName: {file_name}, Teacher: {teacher_id}, Student: {student_id}")
+
+# Step 5: Use Whisper for speech-to-text
+import whisper
+model = whisper.load_model("base")
+
+# Transcribe audio file
+def transcribe_audio(file_path):
+    result = model.transcribe(file_path)
+    return result["text"]
+
+transcription = transcribe_audio(mp3_path)
+print(f"Transcription: {transcription}")
+
+from pyannote.audio import Pipeline
+from pyannote.core import Segment
+
+# 加载预训练的 Pipeline
+pipeline = Pipeline.from_pretrained(
+    "pyannote/speaker-diarization-3.1",
+    use_auth_token="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"
+)
+
+
+# send pipeline to GPU (when available)
+import torch
+pipeline.to(torch.device("cuda"))
+
+# 运行 Pipeline
+diarization = pipeline("/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02_上課錄音檔.wav")
+
+
+diarization
+
+import pandas as pd
+
+# Define the file path
+file_path = '/content/drive/MyDrive/AI_sound/上課錄音檔案樣本資料集(保密資訊).csv'
+
+# Read the CSV file into a DataFrame
+df = pd.read_csv(file_path)
+
+import pandas as pd
+
+# Define the file path
+file_path = '/content/drive/MyDrive/AI_sound/上課錄音檔案樣本資料集(保密資訊).csv'
+
+# Read the CSV file into a DataFrame
+df = pd.read_csv(file_path)
+classroom_id_4794369 = df[df['ClassroomId'] == 4794369]
+
+teacher_info = classroom_id_4794369['Teacher']
+student_info = classroom_id_4794369['Student']
+
+teacher_id = teacher_info.iloc[0]  # 获取老师的ID
+student_id = student_info.iloc[0]  # 获取学生的ID
+
+
+import numpy as np
+
+# 对老师的嵌入向量进行归一化
+def l2_norm(vec):
+    return vec / np.linalg.norm(vec)
+
+teacher_embedding_norm = l2_norm(teacher_embedding)
+
+# 预先加载完整的音频
+waveform_full, sample_rate = torchaudio.load(audio_file_path)
+if sample_rate != 16000:
+    transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+    waveform_full = transform(waveform_full)
+
+# 如果是多通道音频，转换为单声道
+if waveform_full.shape[0] > 1:
+    waveform_full = waveform_full.mean(dim=0, keepdim=True)
+
+# 初始化字典
+speaker_embeddings = {}
+speaker_labels = {}
+
+for turn, _, speaker in diarization.itertracks(yield_label=True):
+    if speaker not in speaker_embeddings:
+        # 截取对应片段
+        start_sample = int(turn.start * sample_rate)
+        end_sample = int(turn.end * sample_rate)
+        speaker_waveform = waveform_full[:, start_sample:end_sample]
+
+        # 检查片段长度，忽略过短的片段
+        if speaker_waveform.shape[1] < sample_rate:  # 少于1秒的片段
+            continue
+
+        # 如果是多通道音频，转换为单声道
+        if speaker_waveform.shape[0] > 1:
+            speaker_waveform = speaker_waveform.mean(dim=0, keepdim=True)
+
+        # 添加批次维度
+        speaker_waveform = speaker_waveform.unsqueeze(0)  # [1, 1, num_samples]
+
+        # 提取嵌入向量
+        embedding = embedding_model(speaker_waveform)
+        # embedding 已经是 NumPy 数组，无需 detach().cpu().numpy()
+        speaker_embedding_norm = l2_norm(embedding)
+
+        speaker_embeddings[speaker] = embedding
+
+        # 计算余弦相似度
+        similarity = np.dot(teacher_embedding_norm, speaker_embedding_norm.T).squeeze()
+
+        # 根据阈值判断身份
+        if similarity < 0.5:  # 根据实际情况调整阈值
+            speaker_labels[speaker] = 'Teacher'
+        else:
+            speaker_labels[speaker] = 'Student'
+print(speaker_labels)
+
+import torch
+from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
+from pyannote.audio import Audio
+from pyannote.core import Segment
+from scipy.spatial.distance import cdist
+
+# 加载预训练的嵌入模型
+model = PretrainedSpeakerEmbedding(
+    "speechbrain/spkrec-ecapa-voxceleb",
+    use_auth_token="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",
+    device=torch.device("cuda")
+)
+
+audio = Audio(sample_rate=48000, mono="downmix")
+
+# 获取音频文件的实际长度
+audio_file = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02_上課錄音檔.wav"
+duration = audio.get_duration(audio_file)
+
+# 遍历所有发言片段并生成对应的嵌入
+for i, (segment, speaker) in enumerate(duration):
+    # 如果片段的结束时间超出音频的实际长度，则进行调整
+    if segment.end > duration:
+        segment = Segment(segment.start, duration)
+
+    waveform, sample_rate = audio.crop(audio_file, segment)
+    embedding = model(waveform[None])
+
+    # 与已知的teacher audio进行对比
+    teacher_segment = Segment(1., 30.)
+    teacher_waveform, sample_rate = audio.crop("/content/drive/MyDrive/AI_sound/上課錄音檔(聲紋比對)/5053 老師錄音檔(聲紋比對用).mp3", teacher_segment)
+    teacher_embedding = model(teacher_waveform[None])
+
+    # 计算余弦距离
+    distance = cdist(embedding, teacher_embedding, metric="cosine")
+
+    print(f"Segment {i} ({speaker}): Distance to teacher = {distance[0][0]}")
+
+# 计算平均距离
+avg_distance_00 = sum(speaker_distances['SPEAKER_00']) / len(speaker_distances['SPEAKER_00']) if speaker_distances['SPEAKER_00'] else float('inf')
+avg_distance_01 = sum(speaker_distances['SPEAKER_01']) / len(speaker_distances['SPEAKER_01']) if speaker_distances['SPEAKER_01'] else float('inf')
+
+# 判断谁更接近老师
+if avg_distance_00 < avg_distance_01:
+    print("SPEAKER_00 is likely the teacher.")
+
+    # 创建一个新的列表，用于存储替换后的结果
+    annotated_diarization = []
+
+    # 遍历 filtered_diarization 并替换 SPEAKER_01 和 SPEAKER_00 为相应的老师和学生的 ID
+    for segment, speaker in duration:
+        if speaker == 'SPEAKER_00':  # 如果是 SPEAKER_00，那么它是老师
+            annotated_diarization.append((segment, teacher_id))
+        elif speaker == 'SPEAKER_01':  # 如果是 SPEAKER_01，那么它是学生
+            annotated_diarization.append((segment, student_id))
+
+    # 打印结果以查看替换后的内容
+    for segment, speaker in annotated_diarization:
+        print(f"Segment: {segment}, Speaker ID: {speaker}")
+
+else:
+    print("SPEAKER_01 is likely the teacher.")
+
+    # 创建一个新的列表，用于存储替换后的结果
+    annotated_diarization = []
+
+    # 遍历 filtered_diarization 并替换 SPEAKER_01 和 SPEAKER_00 为相应的老师和学生的 ID
+    for segment, speaker in duration:
+        if speaker == 'SPEAKER_00':  # 如果是 SPEAKER_00，那么它是学生
+            annotated_diarization.append((segment, student_id))
+        elif speaker == 'SPEAKER_01':  # 如果是 SPEAKER_01，那么它是老师
+            annotated_diarization.append((segment, teacher_id))
+
+    # 打印结果以查看替换后的内容
+    for segment, speaker in annotated_diarization:
+        print(f"Segment: {segment}, Speaker ID: {speaker}")
+
+# 创建一个新的列表，用于存储替换后的结果
+annotated_diarization = []
+
+# 遍历 filtered_diarization 并替换 SPEAKER_01 和 SPEAKER_00 为相应的老师和学生的 ID
+for segment, speaker in filtered_diarization:
+    if speaker == 'SPEAKER_00':
+        annotated_diarization.append((segment, teacher_id))
+    elif speaker == 'SPEAKER_01':
+        annotated_diarization.append((segment, student_id))
+
+# 打印结果以查看替换后的内容
+for segment, speaker in annotated_diarization:
+    print(f"Segment: {segment}, Speaker ID: {speaker}")
+
+
+
+
+
+
+import locale
+def getpreferredencoding(do_setlocale = None):
+    return "UTF-8"
+locale.getpreferredencoding = getpreferredencoding
+!pip install pyannote.audio librosa opensmile
+
+from speechbrain.inference.interfaces import foreign_class
+classifier = foreign_class(source="speechbrain/emotion-recognition-wav2vec2-IEMOCAP", pymodule_file="custom_interface.py", classname="CustomEncoderWav2vec2Classifier")
+out_prob, score, index, text_lab = classifier.classify_file("speechbrain/emotion-recognition-wav2vec2-IEMOCAP/anger.wav")
+print(text_lab)
+
+
+from speechbrain.inference.interfaces import foreign_class
+
+# Load the pretrained classifier model using foreign_class
+classifier = foreign_class(
+    source="speechbrain/emotion-recognition-wav2vec2-IEMOCAP",
+    pymodule_file="custom_interface.py",
+    classname="CustomEncoderWav2vec2Classifier"
+)
+
+# Provide the path to your audio file for emotion analysis
+audio_file = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02_上課錄音檔.wav"
+
+# Classify the file and get the output probabilities, score, index, and label
+out_prob, score, index, text_lab = classifier.classify_file(audio_file)
+
+# Output the predicted emotion label and confidence score
+print(f"Predicted Emotion: {text_lab}")
+print(f"Confidence Score: {score}")
+
+
+import torchaudio
+from speechbrain.pretrained import EmotionRecognizer
+
+# Function to classify emotion from an audio file
+def classify_emotion(audio_path):
+    # Load the pretrained emotion recognizer from SpeechBrain
+    recognizer = EmotionRecognizer.from_hparams(
+        source="speechbrain/emotion-recognition-wav2vec2-IEMOCAP", savedir="tmpdir",
+        use_auth_token="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"
+    )
+
+    # Load the audio file
+    signal, fs = torchaudio.load(audio_path)
+
+    # Perform emotion recognition
+    prediction = recognizer.classify_batch(signal)
+
+    # Get predicted emotion label and confidence score
+    predicted_emotion = prediction[0]["prediction"]
+    confidence = prediction[0]["score"]
+
+    return predicted_emotion, confidence
+
+
+# Example usage: Provide the path to your audio file
+audio_file = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02_上課錄音檔.wav"
+emotion, confidence = classify_emotion(audio_file)
+
+# Output the emotion and confidence
+print(f"Predicted Emotion: {emotion}")
+print(f"Confidence Score: {confidence:.2f}")
+
+
+result
+
+# Sample
+# audio_file_path = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02_上課錄音檔.mp3"
+# Full Version
+audio_file_path = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02.mp3"
+teacher_audio_path = "/content/drive/MyDrive/AI_sound/上課錄音檔morrning(聲紋比對)/5053 老師錄音檔(聲紋比對用).mp3"
+
+
+from pydub import AudioSegment
+
+# 載入音檔
+audio = AudioSegment.from_mp3(audio_file_path)
+
+# 30分鐘 = 30 * 60 * 1000 毫秒
+thirty_minutes = 30 * 60 * 1000
+
+# 裁剪前30分鐘
+audio_30min = audio[:thirty_minutes]
+
+# 儲存裁剪後的音檔
+output_path = "/content/drive/MyDrive/AI_sound/sample/himeet_30min.mp3"
+audio_30min.export(output_path, format="mp3")
+
+print("前30分鐘的音檔已儲存到:", output_path)
+
+
+# 加载预训练的 Pipeline
+pipeline = Pipeline.from_pretrained(
+    "pyannote/speaker-diarization-3.1",
+    use_auth_token="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"
+)
+
+# send pipeline to GPU (when available)
+import torch
+pipeline.to(torch.device("cuda"))
+
+# 运行 Pipeline
+diarization = pipeline(output_path)
+
+
+from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+embedding_model = PretrainedSpeakerEmbedding("speechbrain/spkrec-ecapa-voxceleb", device=device)
+
+import torchaudio
+import torch
+
+def get_embedding(audio_path):
+    waveform, sample_rate = torchaudio.load(audio_path)
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+        waveform = transform(waveform)
+    # 如果是多通道音频，转换为单声道
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    # 添加批次维度
+    waveform = waveform.unsqueeze(0)  # [1, 1, num_samples]
+    embedding = embedding_model(waveform)
+    return embedding  # 返回 NumPy 数组
+
+teacher_embedding = get_embedding(teacher_audio_path)
+
+
+import numpy as np
+
+# 对老师的嵌入向量进行归一化
+def l2_norm(vec):
+    return vec / np.linalg.norm(vec)
+
+teacher_embedding_norm = l2_norm(teacher_embedding)
+
+# 预先加载完整的音频
+waveform_full, sample_rate = torchaudio.load(audio_file_path)
+if sample_rate != 16000:
+    transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+    waveform_full = transform(waveform_full)
+
+# 如果是多通道音频，转换为单声道
+if waveform_full.shape[0] > 1:
+    waveform_full = waveform_full.mean(dim=0, keepdim=True)
+
+# 初始化字典
+speaker_embeddings = {}
+speaker_labels = {}
+
+for turn, _, speaker in diarization.itertracks(yield_label=True):
+    if speaker not in speaker_embeddings:
+        # 截取对应片段
+        start_sample = int(turn.start * sample_rate)
+        end_sample = int(turn.end * sample_rate)
+        speaker_waveform = waveform_full[:, start_sample:end_sample]
+
+        # 检查片段长度，忽略过短的片段
+        if speaker_waveform.shape[1] < sample_rate:  # 少于1秒的片段
+            continue
+
+        # 如果是多通道音频，转换为单声道
+        if speaker_waveform.shape[0] > 1:
+            speaker_waveform = speaker_waveform.mean(dim=0, keepdim=True)
+
+        # 添加批次维度
+        speaker_waveform = speaker_waveform.unsqueeze(0)  # [1, 1, num_samples]
+
+        # 提取嵌入向量
+        embedding = embedding_model(speaker_waveform)
+        # embedding 已经是 NumPy 数组，无需 detach().cpu().numpy()
+        speaker_embedding_norm = l2_norm(embedding)
+
+        speaker_embeddings[speaker] = embedding
+
+        # 计算余弦相似度
+        similarity = np.dot(teacher_embedding_norm, speaker_embedding_norm.T).squeeze()
+
+        # 根据阈值判断身份
+        if similarity < 0.5:  # 根据实际情况调整阈值
+            speaker_labels[speaker] = 'Teacher'
+        else:
+            speaker_labels[speaker] = 'Student'
+
+
+import whisper
+model = whisper.load_model("large")  # 您可以根据需要选择不同的模型，如 "small"、"medium"、"large"
+
+
+import torch
+import torchaudio
+import datetime
+
+# 確保 CUDA 可用，並將模型加載到 GPU
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# 假設這裡的 `model` 是 Whisper 模型，將模型移動到 GPU 上
+model = model.to(device)
+
+transcript = ""
+
+for segment in diarization.itertracks(yield_label=True):
+    start = segment[0].start
+    end = segment[0].end
+    speaker = segment[2]
+
+    # 檢查講者是否在 speaker_labels 中，否則使用預設標籤
+    label = speaker_labels.get(speaker, speaker)  # 若找不到，直接使用 'SPEAKER_XX' 標籤
+
+    # 提取音频片段
+    waveform, sample_rate = torchaudio.load(audio_file_path)
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+        waveform = transform(waveform)
+    start_sample = int(start * 16000)
+    end_sample = int(end * 16000)
+    audio_segment = waveform[:, start_sample:end_sample]
+
+    # 保存临时音频文件
+    temp_audio_path = "temp.wav"
+    torchaudio.save(temp_audio_path, audio_segment, 16000)
+
+    # 確保模型在 GPU 上進行推斷
+    result = model.transcribe(temp_audio_path, language='en')
+
+    # 转换时间格式为可读的时分秒
+    start_time = str(datetime.timedelta(seconds=int(start)))
+    end_time = str(datetime.timedelta(seconds=int(end)))
+
+    # 组合结果
+    transcript += f"[{label}] {start_time} - {end_time}: {result['text']}\n"
+
+# 打印最终结果
+print(transcript)
+
+
+import torch
+import datetime
+import torchaudio
+from speechbrain.inference.interfaces import foreign_class
+
+# 檢查是否可以使用 GPU (CUDA)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Load the pretrained emotion classifier model and move it to GPU if available
+classifier = foreign_class(
+    source="speechbrain/emotion-recognition-wav2vec2-IEMOCAP",
+    pymodule_file="custom_interface.py",
+    classname="CustomEncoderWav2vec2Classifier"
+)
+# 如果模型支持，你可以嘗試將模型移動到 GPU
+# 注意：你需要確定該模型支援移動到 GPU
+# classifier = classifier.to(device)  # 如果模型支援移動到 GPU，這行可以啟用
+
+# Initialize the transcript or result holder
+emotion_analysis = ""
+
+# Diarization analysis (iterating over each segment)
+for segment in diarization.itertracks(yield_label=True):
+    start = segment[0].start
+    end = segment[0].end
+    speaker = segment[2]
+
+    # 檢查講者標籤是否存在於 speaker_labels 中，否則使用預設標籤
+    label = speaker_labels.get(speaker, speaker)  # 若找不到，直接使用 'SPEAKER_XX'
+
+    # 加載完整的音頻文件，並確保音頻在 GPU 上處理
+    waveform, sample_rate = torchaudio.load(audio_file_path)
+    waveform = waveform.to(device)  # 將音頻移動到 GPU
+
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000).to(device)
+        waveform = transform(waveform)
+
+    # 提取對應於講者的語音片段
+    start_sample = int(start * 16000)
+    end_sample = int(end * 16000)
+
+    # 檢查片段是否足夠長以進行處理
+    if end_sample - start_sample < 16000:  # 至少 1 秒
+        print(f"Skipping segment: [{label}] {start:.2f} - {end:.2f} (too short)")
+        continue
+
+    audio_segment = waveform[:, start_sample:end_sample]
+
+    # 保存臨時音頻文件 (classifier.classify_file 期望一個文件路徑)
+    temp_audio_path = "temp.wav"
+    torchaudio.save(temp_audio_path, audio_segment.cpu(), 16000)  # 保存音頻到硬碟上，注意 .cpu()
+
+    # 在音頻片段上進行情緒識別
+    out_prob, score, index, text_lab = classifier.classify_file(temp_audio_path)
+
+    # 將起止時間轉換為可讀格式 (小時:分鐘:秒)
+    start_time = str(datetime.timedelta(seconds=int(start)))
+    end_time = str(datetime.timedelta(seconds=int(end)))
+
+    # 將結果追加到 emotion_analysis
+    emotion_analysis += f"[{label}] {start_time} - {end_time}: Emotion = {text_lab[0]}, Confidence = {score.item():.2f}\n"
+
+# 打印最終的情緒分析結果
+print(emotion_analysis)
+
+import torch
+import torchaudio
+import datetime
+from speechbrain.inference.interfaces import foreign_class
+
+# 檢查是否可以使用 GPU (CUDA)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 加載 Whisper 模型到 GPU
+model = model.to(device)
+
+# 加載情緒分類模型到 GPU，如果支持
+classifier = foreign_class(
+    source="speechbrain/emotion-recognition-wav2vec2-IEMOCAP",
+    pymodule_file="custom_interface.py",
+    classname="CustomEncoderWav2vec2Classifier"
+)
+# 如果模型支持 GPU，可將 classifier 移動到 GPU
+# classifier = classifier.to(device)  # 依賴於模型是否支援 GPU
+
+# 初始化結果存放變數
+combined_analysis = ""  # 用來存放合併結果的變數
+
+# Diarization 分析（遍歷每個片段）
+for segment in diarization.itertracks(yield_label=True):
+    start = segment[0].start
+    end = segment[0].end
+    speaker = segment[2]
+
+    # 檢查講者是否在 speaker_labels 中，否則使用預設標籤
+    label = speaker_labels.get(speaker, speaker)  # 若找不到，直接使用 'SPEAKER_XX' 標籤
+
+    # 提取音频片段並將其移動到 GPU
+    waveform, sample_rate = torchaudio.load(audio_file_path)
+    waveform = waveform.to(device)  # 將音頻移動到 GPU
+
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000).to(device)
+        waveform = transform(waveform)
+
+    start_sample = int(start * 16000)
+    end_sample = int(end * 16000)
+
+    # 檢查片段是否足夠長以進行處理
+    if end_sample - start_sample < 16000:  # 至少 1 秒
+        print(f"Skipping segment: [{label}] {start:.2f} - {end:.2f} (too short)")
+        continue
+
+    audio_segment = waveform[:, start_sample:end_sample]
+
+    # 保存临时音频文件（Whisper 模型和情绪分类器都需要文件路徑）
+    temp_audio_path = "temp.wav"
+    torchaudio.save(temp_audio_path, audio_segment.cpu(), 16000)  # 保存到硬碟，注意 .cpu()
+
+    # 確保 Whisper 模型在 GPU 上進行推斷
+    result = model.transcribe(temp_audio_path, language='en')
+
+    # 在音频片段上進行情绪识别
+    out_prob, score, index, text_lab = classifier.classify_file(temp_audio_path)
+
+    # 转换时间格式为可读的时分秒
+    start_time = str(datetime.timedelta(seconds=int(start)))
+    end_time = str(datetime.timedelta(seconds=int(end)))
+
+    # 合併轉錄和情緒識別結果
+    combined_analysis += (
+        f"[{label}] {start_time} - {end_time}:\n"
+        f"Transcription: {result['text']}\n"
+        f"Emotion: {text_lab[0]}, Confidence: {score.item():.2f}\n\n"
+    )
+
+# 打印最終的合併結果
+print("Combined Transcription and Emotion Analysis Results:")
+print(combined_analysis)
+
+
+import torch
+import torchaudio
+import datetime
+from speechbrain.inference.interfaces import foreign_class
+
+# 檢查是否可以使用 GPU (CUDA)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 加載 Whisper 模型到 GPU
+model = model.to(device)
+
+# 加載情緒分類模型到 GPU，如果支持
+classifier = foreign_class(
+    source="speechbrain/emotion-recognition-wav2vec2-IEMOCAP",
+    pymodule_file="custom_interface.py",
+    classname="CustomEncoderWav2vec2Classifier",
+    run_opts={"device":"cuda"}
+)
+# 如果模型支持 GPU，可將 classifier 移動到 GPU
+# classifier = classifier.to(device)  # 依賴於模型是否支援 GPU
+
+# 初始化結果存放變數
+combined_analysis = ""  # 用來存放合併結果的變數
+
+# Diarization 分析（遍歷每個片段）
+for segment in diarization.itertracks(yield_label=True):
+    start = segment[0].start
+    end = segment[0].end
+    speaker = segment[2]
+
+    # 檢查講者是否在 speaker_labels 中，否則使用預設標籤
+    label = speaker_labels.get(speaker, speaker)  # 若找不到，直接使用 'SPEAKER_XX' 標籤
+
+    # 提取音频片段並將其移動到 GPU
+    waveform, sample_rate = torchaudio.load(audio_file_path)
+    waveform = waveform.to(device)  # 將音頻移動到 GPU
+
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000).to(device)
+        waveform = transform(waveform)
+
+    start_sample = int(start * 16000)
+    end_sample = int(end * 16000)
+
+    # 檢查片段是否足夠長以進行處理
+    if end_sample - start_sample < 16000:  # 至少 1 秒
+        print(f"Skipping segment: [{label}] {start:.2f} - {end:.2f} (too short)")
+        continue
+
+    audio_segment = waveform[:, start_sample:end_sample]
+
+    # 保存临时音频文件（Whisper 模型和情绪分类器都需要文件路徑）
+    temp_audio_path = "temp.wav"
+    torchaudio.save(temp_audio_path, audio_segment.cpu(), 16000)  # 保存到硬碟，注意 .cpu()
+
+    # 確保 Whisper 模型在 GPU 上進行推斷
+    result = model.transcribe(temp_audio_path, language='en')
+
+    # 在音频片段上進行情绪识别
+    out_prob, score, index, text_lab = classifier.classify_file(temp_audio_path)
+
+    # 转换时间格式为可读的时分秒
+    start_time = str(datetime.timedelta(seconds=int(start)))
+    end_time = str(datetime.timedelta(seconds=int(end)))
+
+    # 合併轉錄和情緒識別結果
+    combined_analysis += (
+        f"[{label}] {start_time} - {end_time}:\n"
+        f"Transcription: {result['text']}\n"
+        f"Emotion: {text_lab[0]}, Confidence: {score.item():.2f}\n\n"
+    )
+
+# 打印最終的合併結果
+print("Combined Transcription and Emotion Analysis Results:")
+print(combined_analysis)
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+!pip install git+https://github.com/openai/whisper.git
+!sudo apt update && sudo apt install ffmpeg
+
+import nltk
+from nltk.tokenize import word_tokenize
+
+# 如果你是第一次使用 nltk，需要下載一些數據包
+nltk.download('punkt')
+
+# Warn: 若使用!指令 不可用變數方式輸入whisper，如下
+# file1_path = "/content/drive/MyDrive/URM作業/新錄音 3.m4a"
+# 僅能直接使用字串指令，如下
+# !whisper "/content/drive/MyDrive/AI_sound/上課錄音檔(聲紋比對)/5053 老師錄音檔(聲紋比對用).mp3" --model large-v3 --language zh
+
+# 因此需使用os來替代, 實作如下
+import os
+import shutil
+import subprocess
+
+def whisper_transcribe(audio_path_type: str, output_dir="/content/drive/MyDrive/AI_sound/辨識結果(whisper test)", files_list=[]):
+  # 設定辨識語言
+  lang = 'en'
+
+  # 設定輸出結果的目錄路徑
+  output_dir = "/content/drive/MyDrive/AI_sound/辨識結果(whisper test)"
+
+  # 如果輸出目錄不存在，則創建它
+  if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+  # 列出可能存在的所有音檔
+  ext = ('.mp3',) #之後可try .wav #tuple必須加逗號
+  def remove_extension(filename, extensions):
+    # 檢查並移除副檔名
+    for ext in extensions:
+      if filename.endswith(ext):
+        return filename.rstrip(ext)
+    return filename
+
+  # 讀取音頻位置
+  if audio_path_type == 'folder':
+    # 設定音檔所在的資料夾路徑(會讀取資料夾中所有音頻)
+    # audio_dir = "/content/drive/MyDrive/AI_sound/上課錄音檔(聲紋比對)"
+    audio_dir = "/content/drive/MyDrive/AI_sound/sample"
+    audio_files = [f for f in os.listdir(audio_dir) if f.endswith(ext)]
+  elif audio_path_type == 'file_loc':
+    audio_files = files_list
+  else:
+    return "請指定正確audio file位置"
+
+  # 逐一處理每個音檔
+  for audio_file in audio_files:
+    if audio_path_type == 'folder':
+      audio_path = os.path.join(audio_dir, audio_file)
+    elif audio_path_type == 'file_loc':
+      audio_path = audio_file
+    print(f"輸入檔案位置: {audio_path}")
+
+    # 建立檔案及輸出位置
+    file_name = audio_path.split('/')[-1]
+    output_name = remove_extension(file_name, ext)
+    print(f"檔案名: {output_name}")
+    # 如果輸出子目錄不存在，則創建它
+    if not os.path.exists(f"{output_dir}/{output_name}"):
+      os.makedirs(f"{output_dir}/{output_name}")
+    output_subdir = f"{output_dir}/{output_name}"
+
+    # 使用 subprocess 來執行 Whisper 指令
+    command = [
+        "whisper", audio_path,
+        "--model", "large-v3",
+        "--language", lang,
+        "--output_dir", output_subdir
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode == 0:
+      print(f"成功處理：{audio_file}")
+    else:
+      print(f"處理 {audio_file} 時出現錯誤：{result.stderr}")
+    print('='*50)
+
+    # 若無執行"--output_dir", output_dir
+    # 則可將預設output結果之檔案位置移動到指定的 folder
+    # source_path = f"/content/{output_filename}"
+    # output_path = f"{output_subdir}/{output_name}.txt"
+    # print(output_path)
+    # if os.path.exists(source_path):
+    #   shutil.move(source_path, output_path)
+    #   print(f"已處理：{audio_file} 並將結果儲存為 {output_path}")
+    # else:
+    #   print(f"未找到預期的結果文件：{source_path}")
+
+files_list = ['/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02 上課錄音檔.mp3']
+whisper_transcribe(audio_path_type = 'file_loc', files_list=files_list)
+
+!whisper "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02 上課錄音檔.mp3" --model large-v3 --language en
+
+
+import nltk
+from nltk.tokenize import word_tokenize, RegexpTokenizer
+import string
+
+# 計算字數
+def count_words(text):
+  # 使用 RegexpTokenizer 提取字詞和含有縮寫的詞
+  tokenizer = RegexpTokenizer(r'\w+[\.\w+]*')
+
+  # 進行分詞
+  words = tokenizer.tokenize(text)
+
+  # 過濾掉標點符號，只計算單詞
+  words = [word for word in words]
+  # print(words)
+
+  return len(words)
+
+# # test
+# text = "This is an example sentence, with abbreviations like U.S., and other punctuation!"
+# # 計算字數
+# word_count = count_words(text)
+# print(f"Word count: {word_count}")
+
+
+def draw_reference_line(words_per_second: list, fig, df):
+  # 計算平均值、0.25分位數、0.75分位數
+  avg_wps = np.mean(words_per_second)
+  q25_wps = np.percentile(words_per_second, 25)
+  q75_wps = np.percentile(words_per_second, 75)
+
+  # 繪製平均每秒字數的線
+  fig.add_trace(go.Scatter(
+      x=df['Text'],
+      y=[avg_wps] * len(df['Text']),
+      name='Average Words Per Second',
+      mode='lines',
+      line=dict(color='green', dash='dash')
+  ))
+
+  # 繪製0.25分位數的線
+  fig.add_trace(go.Scatter(
+      x=df['Text'],
+      y=[q25_wps] * len(df['Text']),
+      name='0.25 Quantile',
+      mode='lines',
+      line=dict(color='purple', dash='dash')
+  ))
+
+  # 繪製0.75分位數的線
+  fig.add_trace(go.Scatter(
+      x=df['Text'],
+      y=[q75_wps] * len(df['Text']),
+      name='0.75 Quantile',
+      mode='lines',
+      line=dict(color='red', dash='dash')
+  ))
+
+# 繪製出每段文字的字數和每秒字數之變化圖
+def draw_text_and_duration_variation(texts, durations, word_count_plot=True, word_per_sec='bar'):
+  word_counts = []
+  words_per_second = []
+
+  for text, duration in zip(texts, durations):
+    word_count = count_words(text)
+    word_counts.append(word_count)
+    words_per_second.append(word_count / duration)
+
+  # 創建一個 DataFrame 來存儲結果
+  df = pd.DataFrame({
+      'Text': [f'Text {i+1}' for i in range(len(texts))],
+      'Word Count': word_counts,
+      'Words Per Second': words_per_second
+  })
+
+  # 使用 Plotly 繪製雙柱狀圖
+  fig = go.Figure()
+
+  # 第一個柱狀圖：字數
+  if word_count_plot:
+    fig.add_trace(go.Bar(
+        x=df['Text'],
+        y=df['Word Count'],
+        name='Word Count',
+        marker_color='blue'
+    ))
+
+  # 第二個圖：每秒字數
+  if word_per_sec == 'bar':
+    fig.add_trace(go.Bar(
+        x=df['Text'],
+        y=df['Words Per Second'],
+        name='Words Per Second',
+        marker_color='orange'
+    ))
+  elif word_per_sec == 'line':
+    fig.add_trace(go.Scatter(
+        x=df['Text'],
+        y=df['Words Per Second'],
+        name='Words Per Second',
+        mode='lines+markers',
+        line=dict(color='orange')
+    ))
+    draw_reference_line(words_per_second, fig, df)
+
+
+
+
+  # 更新圖表的佈局
+  fig.update_layout(
+      title='Word Count and Words Per Second for Each Text Segment',
+      xaxis_title='Text Segment',
+      yaxis_title='Count' if word_count_plot else 'Words per Second',
+      barmode='group' if word_count_plot else None  # 將柱狀圖並排顯示
+  )
+
+  # 顯示圖表
+  fig.show()
+
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
+
+# 設定輸出結果的目錄路徑
+transcript_dir = "/content/drive/MyDrive/AI_sound/辨識結果(whisper test)"
+
+# 列出目錄中的所有音檔
+trans_folders = [f for f in os.listdir(transcript_dir)]
+# trans_folders
+
+# 讀取 TSV 檔案
+for trans_name in trans_folders:
+  file_path = f"{transcript_dir}/{trans_name}/{trans_name}.tsv"
+  df = pd.read_csv(file_path, sep='\t')
+
+  # 顯示前幾行資料來確認讀取結果
+  print(df.head())
+
+  # 將 start 和 end 欄位轉換成秒
+  df['start_seconds'] = df['start'] / 1000
+  df['end_seconds'] = df['end'] / 1000
+  df['duration'] = df['end_seconds'] - df['start_seconds']  # 計算持續時間
+
+  # 顯示轉換後的資料
+  print(df.head())
+
+  # 創建duration條形圖
+  fig = go.Figure()
+
+  # 設置數值
+  round_durations = [round(d, 2) for d in df['duration']]
+
+  fig.add_trace(go.Bar(
+      y=df.index,
+      x=df['duration'],
+      base=df['start_seconds'],
+      orientation='h',
+      text=round_durations,
+      hoverinfo='text',
+      marker=dict(color='skyblue'),
+      name='Audio Segment'
+  ))
+
+  # 檢查並標示空缺時間
+  for i in range(1, len(df)):
+    gap_start = df['end_seconds'].iloc[i-1]
+    gap_end = df['start_seconds'].iloc[i]
+    gap_duration = gap_end - gap_start
+
+    if gap_duration > 0:  # 如果有空缺時間
+        fig.add_trace(go.Bar(
+            y=[i-0.5],  # 將空缺顯示在兩段之間
+            x=[gap_duration],
+            base=[gap_start],
+            orientation='h',
+            text=round(gap_duration, 1),
+            marker=dict(color='red'),
+            showlegend=False,
+            hoverinfo='skip'  # 可視需要禁用 hover
+        ))
+
+  # 設置圖表標題和標籤
+  fig.update_layout(
+      title=f'Audio Segments Visualization - {trans_name}',
+      xaxis_title='Time (seconds)',
+      yaxis_title='Segment Index',
+      yaxis=dict(autorange="reversed"),
+      height=600
+  )
+
+  # 顯示圖表
+  fig.show()
+
+  # draw_text_and_duration_variation(texts=df['text'], durations=df['duration'])
+  draw_text_and_duration_variation(texts=df['text'], durations=df['duration'], word_count_plot=False, word_per_sec='line')
