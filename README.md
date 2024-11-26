@@ -1,0 +1,1 @@
+The AI Teaching Assistant project was an entry for the 2024 AI GO competition. We leveraged text-to-speech, speech recognition, and large language models to assist the Hi Tutor online English teaching platform in analyzing students' classroom emotions and providing teaching suggestions. The project ultimately won the Special Excellence Award in the competition.
