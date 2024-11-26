@@ -1,0 +1,236 @@
+from google.colab import drive
+drive.mount('/content/drive')
+
+
+!pip install torch torchvision torchaudio
+!pip install pyannote.audio
+!pip install git+https://github.com/openai/whisper.git
+!pip install jiwer  # 用于评估和文本后处理
+!pip install pydub
+!apt-get install ffmpeg
+
+
+
+import torch
+import whisper
+from pyannote.audio import Pipeline
+from pyannote.core import Segment
+
+
+# Sample
+# audio_file_path = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02_上課錄音檔.mp3"
+# Full Version
+audio_file_path = "/content/drive/MyDrive/AI_sound/sample/himeet_4794369_2024-04-23-21-00-02.mp3"
+teacher_audio_path = "/content/drive/MyDrive/AI_sound/上課錄音檔(聲紋比對)/5053 老師錄音檔(聲紋比對用).mp3"
+
+
+from pydub import AudioSegment
+
+# 載入音檔
+audio = AudioSegment.from_mp3(audio_file_path)
+
+# 30分鐘 = 30 * 60 * 1000 毫秒
+thirty_minutes = 10 * 60 * 1000
+
+# 裁剪前30分鐘
+audio_30min = audio[:thirty_minutes]
+
+# 儲存裁剪後的音檔
+output_path = "/content/drive/MyDrive/AI_sound/sample/himeet_30min.mp3"
+audio_30min.export(output_path, format="mp3")
+
+print("前30分鐘的音檔已儲存到:", output_path)
+
+
+#pipeline = Pipeline.from_pretrained('pyannote/speaker-diarization', use_auth_token="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")
+pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token="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")
+
+diarization = pipeline(output_path)
+
+
+from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+embedding_model = PretrainedSpeakerEmbedding("speechbrain/spkrec-ecapa-voxceleb", device=device)
+
+import torchaudio
+import torch
+
+def get_embedding(audio_path):
+    waveform, sample_rate = torchaudio.load(audio_path)
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+        waveform = transform(waveform)
+    # 如果是多通道音频，转换为单声道
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    # 添加批次维度
+    waveform = waveform.unsqueeze(0)  # [1, 1, num_samples]
+    embedding = embedding_model(waveform)
+    return embedding  # 返回 NumPy 数组
+
+teacher_embedding = get_embedding(teacher_audio_path)
+
+
+import numpy as np
+
+# 对老师的嵌入向量进行归一化
+def l2_norm(vec):
+    return vec / np.linalg.norm(vec)
+
+teacher_embedding_norm = l2_norm(teacher_embedding)
+
+# 预先加载完整的音频
+waveform_full, sample_rate = torchaudio.load(audio_file_path)
+if sample_rate != 16000:
+    transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+    waveform_full = transform(waveform_full)
+
+# 如果是多通道音频，转换为单声道
+if waveform_full.shape[0] > 1:
+    waveform_full = waveform_full.mean(dim=0, keepdim=True)
+
+# 初始化字典
+speaker_embeddings = {}
+speaker_labels = {}
+
+for turn, _, speaker in diarization.itertracks(yield_label=True):
+    if speaker not in speaker_embeddings:
+        # 截取对应片段
+        start_sample = int(turn.start * sample_rate)
+        end_sample = int(turn.end * sample_rate)
+        speaker_waveform = waveform_full[:, start_sample:end_sample]
+
+        # 检查片段长度，忽略过短的片段
+        if speaker_waveform.shape[1] < sample_rate:  # 少于1秒的片段
+            continue
+
+        # 如果是多通道音频，转换为单声道
+        if speaker_waveform.shape[0] > 1:
+            speaker_waveform = speaker_waveform.mean(dim=0, keepdim=True)
+
+        # 添加批次维度
+        speaker_waveform = speaker_waveform.unsqueeze(0)  # [1, 1, num_samples]
+
+        # 提取嵌入向量
+        embedding = embedding_model(speaker_waveform)
+        # embedding 已经是 NumPy 数组，无需 detach().cpu().numpy()
+        speaker_embedding_norm = l2_norm(embedding)
+
+        speaker_embeddings[speaker] = embedding
+
+        # 计算余弦相似度
+        similarity = np.dot(teacher_embedding_norm, speaker_embedding_norm.T).squeeze()
+
+        # 根据阈值判断身份
+        if similarity < 0.5:  # 根据实际情况调整阈值
+            speaker_labels[speaker] = 'Teacher'
+        else:
+            speaker_labels[speaker] = 'Student'
+
+
+model = whisper.load_model("base")  # 您可以根据需要选择不同的模型，如 "small"、"medium"、"large"
+
+
+import datetime
+
+transcript = ""
+
+for segment in diarization.itertracks(yield_label=True):
+    start = segment[0].start
+    end = segment[0].end
+    speaker = segment[2]
+
+    # 檢查講者是否在 speaker_labels 中，否則使用預設標籤
+    label = speaker_labels.get(speaker, speaker)  # 若找不到，直接使用 'SPEAKER_XX' 標籤
+
+    # 提取音频片段
+    waveform, sample_rate = torchaudio.load(output_path)
+    if sample_rate != 16000:
+        transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+        waveform = transform(waveform)
+    start_sample = int(start * 16000)
+    end_sample = int(end * 16000)
+    audio_segment = waveform[:, start_sample:end_sample]
+
+    # 保存临时音频文件
+    temp_audio_path = "temp.wav"
+    torchaudio.save(temp_audio_path, audio_segment, 16000)
+
+    # 转录
+    result = model.transcribe(temp_audio_path, language='en')
+
+    # 转换时间格式为可读的时分秒
+    start_time = str(datetime.timedelta(seconds=int(start)))
+    end_time = str(datetime.timedelta(seconds=int(end)))
+
+    # 组合结果
+    transcript += f"[{label}] {start_time} - {end_time}: {result['text']}\n"
+
+# 打印最终结果
+print(transcript)
+
+
+print(transcript)
+
+
+pip install --upgrade openai
+
+from openai import OpenAI
+api_key = "OPEN AI API KEY"
+client = OpenAI(api_key = api_key)
+
+completion = client.chat.completions.create(
+  model="gpt-3.5-turbo",
+  messages=[
+    {"role": "assistant", "content": "你是一個心理學家，擅長於語意分析，我將提供一段老師和學生對話的逐字稿，內容是英文的，請在閱讀完整的逐字稿內容後，告訴我老師和學生在哪一些段落的情緒起伏較大，並加以說明，並給老師一些指導學生上的建議："},
+    {"role": "user", "content": transcript}
+  ]
+)
+
+print(completion.choices[0].message)
+
+gpt_prompt = """你是一個心理學家，擅長於語意分析，我將提供一段老師和學生對話的逐字稿，內容是英文的，請在閱讀完整的逐字稿內容後，告訴我學生在哪一些段落的情緒起伏較大，並加以說明判斷的原因，並針對該段對話貼上學生對應的情緒標籤。
+
+呈現的結果請包含
+對話的時間區間、對話的逐字稿內容、判斷的原因、情緒標籤、最後給老師的建議
+
+情緒標籤如下
+中性
+正面情緒：
+滿意（Satisfaction）：對課程內容或老師的教學感到滿意。
+自信（Confidence）：對自己學習進度或語言能力的信心增加。
+興奮（Excitement）：對新學習內容感到興趣或覺得有趣。
+樂觀（Optimism）：相信自己能在課程中取得進步。
+成就感（Sense of Achievement）：完成任務或達成學習目標時的感受。
+投入（Engagement）：專注於學習，感到課程對自己有幫助。
+
+負面情緒：
+沮喪（Frustration）：學習遇到困難，難以理解或跟上進度。
+焦慮（Anxiety）：對於測驗、口語練習或學習結果感到緊張。
+厭倦（Boredom）：對課程內容或教學方式感到無聊或缺乏興趣。
+困惑（Confusion）：對學習內容或指導不清楚，無法理解或完成任務。
+挫折（Discouragement）：覺得自己無法達到學習期望或目標，感到失望。
+壓力（Stress）：感受到學習的壓力過大，可能來自時間管理或課程難度。"""
+
+import json
+
+completion = client.chat.completions.create(
+  model="gpt-4-turbo",  # 使用 GPT-4-turbo 模型
+  messages=[
+    {"role": "assistant", "content": gpt_prompt},
+    {"role": "user", "content": transcript}
+  ]
+)
+
+# 直接存取 message 的 content 屬性
+output_message = completion.choices[0].message.content
+formatted_message = json.dumps(output_message, indent=4, ensure_ascii=False)
+
+print(formatted_message)
+
+
+# 直接取得 content 並進行輸出
+output_message = completion.choices[0].message.content
+
+print(output_message)
+
